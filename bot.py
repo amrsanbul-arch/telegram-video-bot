@@ -21,7 +21,7 @@ from telegram.ext import (
     ContextTypes
 )
 
-BOT_TOKEN = os.environ.get("8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I")
 
 DOWNLOAD_DIR = os.path.expanduser(
     "~/videobot/downloads"
