@@ -27,7 +27,7 @@ BOT_TOKEN = os.environ.get(
     "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I"
 )
 
-DOWNLOAD_DIR = os.path.expanduser("\~/videobot/downloads")
+DOWNLOAD_DIR = os.path.expanduser("~/videobot/downloads")
 
 COOKIES_BASE64 = os.environ.get("COOKIES_BASE64", "")
 
@@ -37,7 +37,7 @@ if COOKIES_BASE64:
     _tmp.close()
     COOKIES_FILE = _tmp.name
 else:
-    COOKIES_FILE = os.path.expanduser("\~/videobot/cookies.txt")
+    COOKIES_FILE = os.path.expanduser("~/videobot/cookies.txt")
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -282,7 +282,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(show_sites, pattern="^sites$"))
     app.add_handler(CallbackQueryHandler(download_handler, pattern=r"^dl\|"))
-    app.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, handle_url))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
 
     print("🤖 BOT IS RUNNING...")
     app.run_polling()
