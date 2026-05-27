@@ -4,6 +4,7 @@ import yt_dlp
 import re
 import hashlib
 import uuid
+import tempfile
 
 from telegram import (
     Update,
@@ -20,15 +21,29 @@ from telegram.ext import (
     ContextTypes
 )
 
-BOT_TOKEN = "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I"
+BOT_TOKEN = os.environ.get("8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I", "")
 
 DOWNLOAD_DIR = os.path.expanduser(
     "~/videobot/downloads"
 )
 
-COOKIES_FILE = os.path.expanduser(
-    "~/videobot/cookies.txt"
+COOKIES_CONTENT = os.environ.get(
+    "COOKIES_CONTENT", ""
 )
+
+if COOKIES_CONTENT:
+    _tmp = tempfile.NamedTemporaryFile(
+        mode='w',
+        suffix='.txt',
+        delete=False
+    )
+    _tmp.write(COOKIES_CONTENT)
+    _tmp.close()
+    COOKIES_FILE = _tmp.name
+else:
+    COOKIES_FILE = os.path.expanduser(
+        "~/videobot/cookies.txt"
+    )
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -515,7 +530,6 @@ async def handle_url(
             views = info.get('view_count', 0)
             likes = info.get('like_count', 0)
 
-            # ✅ تم التصحيح
             views_str = (
                 f"{int(float(views)):,}"
                 if views
