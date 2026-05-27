@@ -5,6 +5,7 @@ import re
 import hashlib
 import uuid
 import tempfile
+import base64
 
 from telegram import (
     Update,
@@ -21,23 +22,26 @@ from telegram.ext import (
     ContextTypes
 )
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I")
+BOT_TOKEN = os.environ.get(
+    "BOT_TOKEN",
+    "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I"
+)
 
 DOWNLOAD_DIR = os.path.expanduser(
     "~/videobot/downloads"
 )
 
-COOKIES_CONTENT = os.environ.get(
-    "COOKIES_CONTENT", ""
+COOKIES_BASE64 = os.environ.get(
+    "COOKIES_BASE64", ""
 )
 
-if COOKIES_CONTENT:
+if COOKIES_BASE64:
     _tmp = tempfile.NamedTemporaryFile(
-        mode='w',
+        mode='wb',
         suffix='.txt',
         delete=False
     )
-    _tmp.write(COOKIES_CONTENT)
+    _tmp.write(base64.b64decode(COOKIES_BASE64))
     _tmp.close()
     COOKIES_FILE = _tmp.name
 else:
