@@ -6,25 +6,14 @@ import hashlib
 import uuid
 import tempfile
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    filters,
-    ContextTypes
-)
+# ================= التوكن =================
+BOT_TOKEN = "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I"
 
-BOT_TOKEN = os.environ.get("8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I", "")
-
-DOWNLOAD_DIR = "/tmp/videobot_downloads"
-
+# ================= الإعدادات =================
+DOWNLOAD_DIR = "/data/data/com.termux/files/home/telegram-video-bot/downloads"
 COOKIES_CONTENT = os.environ.get("COOKIES_CONTENT", "")
 
 if COOKIES_CONTENT:
@@ -33,20 +22,19 @@ if COOKIES_CONTENT:
     _tmp.close()
     COOKIES_FILE = _tmp.name
 else:
-    COOKIES_FILE = os.path.expanduser("~/videobot/cookies.txt")
+    COOKIES_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 MAX_PARALLEL = 2
 TIMEOUT = 180
 
-
+# ================= دوال مساعدة =================
 def clean_youtube_url(url):
     if "/shorts/" in url:
         match = re.search(r'/shorts/([a-zA-Z0-9_-]+)', url)
         if match:
-            video_id = match.group(1)
-            url = f"https://www.youtube.com/watch?v={video_id}"
+            url = f"https://www.youtube.com/watch?v={match.group(1)}"
     if "?" in url:
         match = re.search(r'v=([a-zA-Z0-9_-]+)', url)
         if match:
@@ -55,16 +43,14 @@ def clean_youtube_url(url):
             url = url.split('?')[0]
     return url
 
-
 def clean_markdown(text):
     special_chars = r'[_*`\[\]()~>#+\-=|{}.!]'
     return re.sub(special_chars, '', str(text))
 
-
 def sanitize_filename(name):
     return re.sub(r'[\\/*?:"<>|]', "", str(name))
 
-
+# ================= أوامر البوت =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("المواقع المدعومة", callback_data="sites")]]
     welcome_text = """
@@ -86,7 +72,6 @@ START DOWNLOAD NOW
 POWERED BY AI
     """
     await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
-
 
 async def show_sites(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -112,7 +97,6 @@ Twitch - Kick - Rumble
 100+ PLATFORMS SUPPORTED
     """
     await query.message.reply_text(sites_text)
-
 
 async def download_single(url, quality, chat_id, context, status_msg=None):
     try:
@@ -142,13 +126,11 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
             'merge_output_format': 'mp4',
             'retries': 5,
             'fragment_retries': 5,
+            'cookiefile': COOKIES_FILE,  # 🔑 الكوكيز رجعت
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
         }
-
-        if os.path.exists(COOKIES_FILE):
-            ydl_opts["cookiefile"] = COOKIES_FILE
 
         if quality == "audio":
             ydl_opts['postprocessors'] = [{
@@ -249,7 +231,6 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
                 pass
         return False
 
-
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     urls = [line.strip() for line in text.splitlines() if line.strip().startswith(("http://", "https://"))]
@@ -271,10 +252,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'noplaylist': True,
                     'no_warnings': True,
                     'ignoreerrors': False,
+                    'cookiefile': COOKIES_FILE,  # 🔑 الكوكيز هنا برضه
                     'http_headers': {'User-Agent': 'Mozilla/5.0'},
                 }
-                if os.path.exists(COOKIES_FILE):
-                    ydl_params["cookiefile"] = COOKIES_FILE
                 with yt_dlp.YoutubeDL(ydl_params) as ydl:
                     return ydl.extract_info(url, download=False)
 
@@ -368,7 +348,6 @@ DOWNLOAD OPTIONS
     except Exception:
         pass
 
-
 async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -398,7 +377,7 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-
+# ================= تشغيل البوت =================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -407,7 +386,6 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     print("BOT IS RUNNING!")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
