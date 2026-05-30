@@ -93,7 +93,62 @@ Twitch - Kick - Rumble
     """
     await query.message.reply_text(sites_text)
 
-# ================= الدالة الناقصة =================
+# ================= تحميل فيديو واحد =================
+async def download_single(url, quality, chat_id, context, status_msg=None):
+    try:
+        url = clean_youtube_url(url)
+        fmt = 'best[filesize<50M]/best'
+        if quality == "720":
+            fmt = 'bestvideo[height<=720][filesize<50M]+bestaudio/best'
+        elif quality == "360":
+            fmt = 'bestvideo[height<=360][filesize<50M]+bestaudio/best'
+        elif quality == "audio":
+            fmt = 'bestaudio/best'
+
+        unique_id = str(uuid.uuid4())[:8]
+        ydl_opts = {
+            'format': fmt,
+            'outtmpl': f'{DOWNLOAD_DIR}/%(title)s_{unique_id}.%(ext)s',
+            'quiet': True,
+            'cookiefile': COOKIES_FILE,
+        }
+
+        loop = asyncio.get_running_loop()
+        def do_download():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+                return filename, info.get('title', 'VIDEO')
+
+        filename, title = await asyncio.wait_for(loop.run_in_executor(None, do_download), timeout=TIMEOUT)
+
+        with open(filename, 'rb') as f:
+            if quality == "audio":
+                await context.bot.send_audio(chat_id=chat_id, audio=f, title=title)
+            else:
+                await context.bot.send_video(chat_id=chat_id, video=f, caption=title)
+
+        os.remove(filename)
+        return True
+
+    except Exception as e:
+        if status_msg:
+            await status_msg.edit_text(f"ERROR: {str(e)[:100]}")
+        return False
+
+# ================= التعامل مع الروابط =================
+async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    urls = [line for line in text.splitlines() if line.startswith(("http://", "https://"))]
+
+    if not urls:
+        await update.message.reply_text("INVALID URL - Send correct link")
+        return
+
+    msg = await update.message.reply_text("SCANNING VIDEO...")
+    await msg.edit_text("تم استلام الرابط وجاري التحميل...")
+
+# ================= تحميل من زرار الكيبورد =================
 async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -103,25 +158,15 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = context.user_data.get(url_hash)
 
         if not url:
-            try:
-                await query.message.edit_text("ERROR - Link not found")
-            except Exception:
-                pass
+            await query.message.edit_text("ERROR - Link not found")
             return
 
-        try:
-            await query.message.edit_text("DOWNLOADING...")
-        except Exception:
-            pass
-
+        await query.message.edit_text("DOWNLOADING...")
         await download_single(url, quality, query.message.chat.id, context, query.message)
         context.user_data.pop(url_hash, None)
 
     except Exception as e:
-        try:
-            await query.message.edit_text(f"ERROR: {str(e)[:100]}")
-        except Exception:
-            pass
+        await query.message.edit_text(f"ERROR: {str(e)[:100]}")
 
 # ================= تشغيل البوت =================
 def main():
