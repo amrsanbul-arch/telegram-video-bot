@@ -9,9 +9,8 @@ import tempfile
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# ================= التوكن =================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-print("DEBUG BOT_TOKEN:", BOT_TOKEN)  # للتأكد من قراءة التوكن في الـ Logs
+# ================= التوكن (غيره بتاعك) =================
+BOT_TOKEN = "ضع_التوكن_الجديد_هنا"
 
 # ================= الإعدادات =================
 DOWNLOAD_DIR = "/home/amrsanbul/downloads"
@@ -28,7 +27,7 @@ else:
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 MAX_PARALLEL = 2
-TIMEOUT = 180
+TIMEOUT = 300  # زيادة المهلة إلى 5 دقائق
 
 # ================= دوال مساعدة =================
 def clean_youtube_url(url):
@@ -59,9 +58,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     SYSTEM READY
 ◣━━━━━━━━━━━━━━━━━━━━━◢
 
+▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹
+
 STATUS: ONLINE
 BOT: ACTIVATED
 READY: YES
+
+▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹
 
 SEND VIDEO LINK
 START DOWNLOAD NOW
@@ -89,38 +92,134 @@ Apple Music - Deezer
 LIVE STREAMING:
 Twitch - Kick - Rumble
 
+▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹
+
 100+ PLATFORMS SUPPORTED
     """
     await query.message.reply_text(sites_text)
 
-# ================= تحميل فيديو واحد =================
 async def download_single(url, quality, chat_id, context, status_msg=None):
     try:
         url = clean_youtube_url(url)
-        fmt = 'best[filesize<50M]/best'
-        if quality == "720":
-            fmt = 'bestvideo[height<=720][filesize<50M]+bestaudio/best'
+
+        if quality == "best":
+            fmt = 'best[filesize<50M]/bestvideo[filesize<50M]+bestaudio/best'
+        elif quality == "720":
+            fmt = 'bestvideo[height<=720][filesize<50M]+bestaudio/best[height<=720][filesize<50M]/best'
         elif quality == "360":
-            fmt = 'bestvideo[height<=360][filesize<50M]+bestaudio/best'
+            fmt = 'bestvideo[height<=360][filesize<50M]+bestaudio/best[height<=360][filesize<50M]/best'
         elif quality == "audio":
             fmt = 'bestaudio/best'
+        else:
+            fmt = 'best[filesize<50M]/best'
 
         unique_id = str(uuid.uuid4())[:8]
+
+        # ========== إعدادات التحميل المحسنة ==========
         ydl_opts = {
             'format': fmt,
             'outtmpl': f'{DOWNLOAD_DIR}/%(title)s_{unique_id}.%(ext)s',
             'quiet': True,
+            'noplaylist': True,
+            'ignoreerrors': False,
+            'no_warnings': True,
+            'extract_flat': False,
+            'merge_output_format': 'mp4',
+            'retries': 5,
+            'fragment_retries': 5,
+            'socket_timeout': 30,
+            'no_check_certificate': True,
             'cookiefile': COOKIES_FILE,
+            'proxy': None,
+            'noproxy': '*',
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36'
+            },
+            'extractor_args': {
+                'twitter': {
+                    'api': ['legacy'],
+                    'bearer_token': ['AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'],
+                },
+                'tiktok': {
+                    'embed_url': ['True'],
+                },
+            },
         }
 
+        if quality == "audio":
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '320',
+            }]
+
         loop = asyncio.get_running_loop()
+
         def do_download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
+                if not info:
+                    raise Exception("Failed to extract media")
                 filename = ydl.prepare_filename(info)
-                return filename, info.get('title', 'VIDEO')
+                if quality == "audio":
+                    filename = filename.rsplit('.', 1)[0] + '.mp3'
+                else:
+                    if not os.path.exists(filename):
+                        for f in os.listdir(DOWNLOAD_DIR):
+                            if unique_id in f and f.endswith('.mp4'):
+                                filename = os.path.join(DOWNLOAD_DIR, f)
+                                break
+                # التحقق من حجم الفيديو قبل الرفع
+                if os.path.exists(filename) and os.path.getsize(filename) > 50 * 1024 * 1024:
+                    raise Exception("Video exceeds 50MB limit")
+                title = sanitize_filename(info.get('title', 'VIDEO'))[:40]
+                return filename, title
 
-        filename, title = await asyncio.wait_for(loop.run_in_executor(None, do_download), timeout=TIMEOUT)
+        if status_msg:
+            try:
+                await status_msg.edit_text("▹▹▹ DOWNLOADING ▹▹▹")
+            except Exception:
+                pass
+
+        try:
+            filename, title = await asyncio.wait_for(loop.run_in_executor(None, do_download), timeout=TIMEOUT)
+        except asyncio.TimeoutError:
+            if status_msg:
+                try:
+                    await status_msg.edit_text("❌ TIME LIMIT EXCEEDED (5 min)")
+                except Exception:
+                    pass
+            return False
+
+        if not os.path.exists(filename):
+            for f in os.listdir(DOWNLOAD_DIR):
+                if f.endswith(('.mp4', '.mp3')) and unique_id in f:
+                    filename = os.path.join(DOWNLOAD_DIR, f)
+                    break
+            else:
+                if status_msg:
+                    try:
+                        await status_msg.edit_text("❌ FILE NOT FOUND")
+                    except Exception:
+                        pass
+                return False
+
+        file_size = os.path.getsize(filename) / (1024 * 1024)
+        if file_size > 50:
+            if status_msg:
+                try:
+                    await status_msg.edit_text(f"❌ SIZE LIMIT ({file_size:.1f}MB/50MB)")
+                except Exception:
+                    pass
+            if os.path.exists(filename):
+                os.remove(filename)
+            return False
+
+        if status_msg:
+            try:
+                await status_msg.edit_text(f"▹▹▹ UPLOADING ({file_size:.1f}MB) ▹▹▹")
+            except Exception:
+                pass
 
         with open(filename, 'rb') as f:
             if quality == "audio":
@@ -128,27 +227,145 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
             else:
                 await context.bot.send_video(chat_id=chat_id, video=f, caption=title)
 
-        os.remove(filename)
+        if os.path.exists(filename):
+            os.remove(filename)
+
+        if status_msg:
+            try:
+                await status_msg.edit_text("✅ COMPLETED")
+                await status_msg.delete()
+            except Exception:
+                pass
+
         return True
 
     except Exception as e:
+        error_msg = str(e)
         if status_msg:
-            await status_msg.edit_text(f"ERROR: {str(e)[:100]}")
+            try:
+                await status_msg.edit_text(f"❌ ERROR: {error_msg[:100]}")
+            except Exception:
+                pass
         return False
 
-# ================= التعامل مع الروابط =================
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    urls = [line for line in text.splitlines() if line.startswith(("http://", "https://"))]
+    urls = [line.strip() for line in text.splitlines() if line.strip().startswith(("http://", "https://"))]
 
     if not urls:
-        await update.message.reply_text("INVALID URL - Send correct link")
+        await update.message.reply_text("❌ INVALID URL - Send correct link")
         return
 
-    msg = await update.message.reply_text("SCANNING VIDEO...")
-    await msg.edit_text("تم استلام الرابط وجاري التحميل...")
+    if len(urls) == 1:
+        url = clean_youtube_url(urls[0])
+        msg = await update.message.reply_text("🔍 SCANNING...")
 
-# ================= تحميل من زرار الكيبورد =================
+        try:
+            loop = asyncio.get_running_loop()
+
+            def get_info():
+                ydl_params = {
+                    'quiet': True,
+                    'noplaylist': True,
+                    'no_warnings': True,
+                    'ignoreerrors': False,
+                    'cookiefile': COOKIES_FILE,
+                    'socket_timeout': 30,
+                    'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36'},
+                }
+                with yt_dlp.YoutubeDL(ydl_params) as ydl:
+                    return ydl.extract_info(url, download=False)
+
+            info = await asyncio.wait_for(loop.run_in_executor(None, get_info), timeout=15)
+
+            if not info:
+                raise Exception("Failed to fetch info")
+
+            title = clean_markdown(info.get('title', 'VIDEO')[:50])
+            duration = info.get('duration', 0)
+            if duration and isinstance(duration, (int, float)):
+                mins = int(duration // 60)
+                secs = int(duration % 60)
+                duration_str = f"{mins}:{secs:02d}"
+            else:
+                duration_str = "UNKNOWN"
+
+            uploader = clean_markdown(info.get('uploader', 'UNKNOWN'))
+            views = info.get('view_count', 0)
+            likes = info.get('like_count', 0)
+
+            views_str = f"{int(float(views)):,}" if views else "N/A"
+            likes_str = f"{int(float(likes)):,}" if likes else "N/A"
+
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:10]
+            context.user_data[url_hash] = url
+
+            result_text = f"""
+◤━━━━━━━━━━━━━━━━━━━━━◥
+     ANALYSIS COMPLETE
+◣━━━━━━━━━━━━━━━━━━━━━◢
+
+▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹
+
+📌 TITLE: {title}
+⏱️ DURATION: {duration_str}
+👤 UPLOADER: {uploader}
+👁️ VIEWS: {views_str}
+❤️ LIKES: {likes_str}
+✅ STATUS: READY
+
+▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹▹
+
+📥 DOWNLOAD OPTIONS
+            """
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("🎬 BEST QUALITY", callback_data=f"dl|best|{url_hash}"),
+                    InlineKeyboardButton("📺 720p HD", callback_data=f"dl|720|{url_hash}")
+                ],
+                [
+                    InlineKeyboardButton("📱 360p SD", callback_data=f"dl|360|{url_hash}"),
+                    InlineKeyboardButton("🎵 AUDIO MP3", callback_data=f"dl|audio|{url_hash}")
+                ]
+            ]
+
+            await msg.edit_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+        except asyncio.TimeoutError:
+            try:
+                await msg.edit_text("⏰ TIMEOUT - Try again")
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                await msg.edit_text(f"❌ ERROR: {str(e)[:100]}")
+            except Exception:
+                pass
+        return
+
+    if len(urls) > MAX_PARALLEL:
+        await update.message.reply_text(f"⚠️ LIMIT - First {MAX_PARALLEL} links only")
+        urls = urls[:MAX_PARALLEL]
+
+    summary_msg = await update.message.reply_text(f"⚡ PARALLEL MODE - {len(urls)} links")
+    status_msgs = []
+
+    for i, url in enumerate(urls):
+        msg = await update.message.reply_text(f"[{i + 1}] INITIALIZING...")
+        status_msgs.append(msg)
+
+    tasks = [download_single(url, "best", update.effective_chat.id, context, status_msgs[i]) for i, url in enumerate(urls)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    success = sum(1 for r in results if r is True)
+    failed = len(urls) - success
+
+    try:
+        await summary_msg.edit_text(f"✅ COMPLETE - Success: {success} | Failed: {failed}")
+    except Exception:
+        pass
+
 async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -158,15 +375,25 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = context.user_data.get(url_hash)
 
         if not url:
-            await query.message.edit_text("ERROR - Link not found")
+            try:
+                await query.message.edit_text("❌ ERROR - Link not found")
+            except Exception:
+                pass
             return
 
-        await query.message.edit_text("DOWNLOADING...")
+        try:
+            await query.message.edit_text("▹▹▹ DOWNLOADING ▹▹▹")
+        except Exception:
+            pass
+
         await download_single(url, quality, query.message.chat.id, context, query.message)
         context.user_data.pop(url_hash, None)
 
     except Exception as e:
-        await query.message.edit_text(f"ERROR: {str(e)[:100]}")
+        try:
+            await query.message.edit_text(f"❌ ERROR: {str(e)[:100]}")
+        except Exception:
+            pass
 
 # ================= تشغيل البوت =================
 def main():
@@ -175,7 +402,7 @@ def main():
     app.add_handler(CallbackQueryHandler(show_sites, pattern="^sites$"))
     app.add_handler(CallbackQueryHandler(download_handler, pattern=r"^dl\|"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
-    print("BOT IS RUNNING!")
+    print("🤖 BOT IS RUNNING!")
     app.run_polling()
 
 if __name__ == "__main__":
