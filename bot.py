@@ -10,10 +10,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # ================= التوكن =================
-BOT_TOKEN = "8855988682:AAG7cLR0rpMUPGthBCcf-Ky_JwPIO1urH7I"
+BOT_TOKEN = os.getenv("TOKEN")
 
 # ================= الإعدادات =================
-DOWNLOAD_DIR = "/data/data/com.termux/files/home/telegram-video-bot/downloads"
+DOWNLOAD_DIR = "downloads"
 COOKIES_CONTENT = os.environ.get("COOKIES_CONTENT", "")
 
 if COOKIES_CONTENT:
@@ -115,6 +115,7 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
 
         unique_id = str(uuid.uuid4())[:8]
 
+        # ========== إعدادات التحميل المحدثة (YouTube, Instagram, Twitter, TikTok) ==========
         ydl_opts = {
             'format': fmt,
             'outtmpl': f'{DOWNLOAD_DIR}/%(title)s_{unique_id}.%(ext)s',
@@ -126,9 +127,20 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
             'merge_output_format': 'mp4',
             'retries': 5,
             'fragment_retries': 5,
-            'cookiefile': COOKIES_FILE,  # 🔑 الكوكيز رجعت
+            'cookiefile': COOKIES_FILE,
+            'proxy': None,
+            'noproxy': '*',
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36'
+            },
+            'extractor_args': {
+                'twitter': {
+                    'api': ['legacy'],
+                    'bearer_token': ['AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'],
+                },
+                'tiktok': {
+                    'embed_url': ['True'],
+                },
             },
         }
 
@@ -252,8 +264,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'noplaylist': True,
                     'no_warnings': True,
                     'ignoreerrors': False,
-                    'cookiefile': COOKIES_FILE,  # 🔑 الكوكيز هنا برضه
-                    'http_headers': {'User-Agent': 'Mozilla/5.0'},
+                    'cookiefile': COOKIES_FILE,
+                    'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36'},
                 }
                 with yt_dlp.YoutubeDL(ydl_params) as ydl:
                     return ydl.extract_info(url, download=False)
