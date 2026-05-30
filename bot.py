@@ -9,11 +9,11 @@ import tempfile
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# ================= التوكن (غيره بتاعك) =================
+# ================= التوكن =================
 BOT_TOKEN = "8855988682:AAE-sjgsEUYVptZpD9ryE0Afw_DqwT9umsk"
 
 # ================= الإعدادات =================
-DOWNLOAD_DIR = "/home/amrsanbul/downloads"
+DOWNLOAD_DIR = "/tmp/videobot_downloads"
 COOKIES_CONTENT = os.environ.get("COOKIES_CONTENT", "")
 
 if COOKIES_CONTENT:
@@ -27,7 +27,7 @@ else:
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 MAX_PARALLEL = 2
-TIMEOUT = 300  # زيادة المهلة إلى 5 دقائق
+TIMEOUT = 300
 
 # ================= دوال مساعدة =================
 def clean_youtube_url(url):
@@ -102,20 +102,11 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
     try:
         url = clean_youtube_url(url)
 
-        if quality == "best":
-            fmt = 'best[filesize<50M]/bestvideo[filesize<50M]+bestaudio/best'
-        elif quality == "720":
-            fmt = 'bestvideo[height<=720][filesize<50M]+bestaudio/best[height<=720][filesize<50M]/best'
-        elif quality == "360":
-            fmt = 'bestvideo[height<=360][filesize<50M]+bestaudio/best[height<=360][filesize<50M]/best'
-        elif quality == "audio":
-            fmt = 'bestaudio/best'
-        else:
-            fmt = 'best[filesize<50M]/best'
+        # ========== صيغة التحميل الجديدة (أفضل جودة متاحة) ==========
+        fmt = 'best[ext=mp4]/best'  # ← التعديل الأساسي
 
         unique_id = str(uuid.uuid4())[:8]
 
-        # ========== إعدادات التحميل المحسنة ==========
         ydl_opts = {
             'format': fmt,
             'outtmpl': f'{DOWNLOAD_DIR}/%(title)s_{unique_id}.%(ext)s',
@@ -169,9 +160,6 @@ async def download_single(url, quality, chat_id, context, status_msg=None):
                             if unique_id in f and f.endswith('.mp4'):
                                 filename = os.path.join(DOWNLOAD_DIR, f)
                                 break
-                # التحقق من حجم الفيديو قبل الرفع
-                if os.path.exists(filename) and os.path.getsize(filename) > 50 * 1024 * 1024:
-                    raise Exception("Video exceeds 50MB limit")
                 title = sanitize_filename(info.get('title', 'VIDEO'))[:40]
                 return filename, title
 
@@ -322,11 +310,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [
                 [
                     InlineKeyboardButton("🎬 BEST QUALITY", callback_data=f"dl|best|{url_hash}"),
-                    InlineKeyboardButton("📺 720p HD", callback_data=f"dl|720|{url_hash}")
-                ],
-                [
-                    InlineKeyboardButton("📱 360p SD", callback_data=f"dl|360|{url_hash}"),
-                    InlineKeyboardButton("🎵 AUDIO MP3", callback_data=f"dl|audio|{url_hash}")
                 ]
             ]
 
