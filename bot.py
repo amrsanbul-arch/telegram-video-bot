@@ -10,7 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # ================= التوكن (غيره بتاعك) =================
-BOT_TOKEN = "ضع_التوكن_الجديد_هنا"
+BOT_TOKEN = "8855988682:AAE-sjgsEUYVptZpD9ryE0Afw_DqwT9umsk"
 
 # ================= الإعدادات =================
 DOWNLOAD_DIR = "/home/amrsanbul/downloads"
