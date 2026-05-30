@@ -93,7 +93,35 @@ Twitch - Kick - Rumble
     """
     await query.message.reply_text(sites_text)
 
-# (باقي الدوال زي ما هي من الكود الأصلي: download_single, handle_url, download_handler)
+# ================= الدالة الناقصة =================
+async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        _, quality, url_hash = query.data.split("|", 2)
+        url = context.user_data.get(url_hash)
+
+        if not url:
+            try:
+                await query.message.edit_text("ERROR - Link not found")
+            except Exception:
+                pass
+            return
+
+        try:
+            await query.message.edit_text("DOWNLOADING...")
+        except Exception:
+            pass
+
+        await download_single(url, quality, query.message.chat.id, context, query.message)
+        context.user_data.pop(url_hash, None)
+
+    except Exception as e:
+        try:
+            await query.message.edit_text(f"ERROR: {str(e)[:100]}")
+        except Exception:
+            pass
 
 # ================= تشغيل البوت =================
 def main():
